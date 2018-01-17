@@ -77,6 +77,8 @@ class RoverState():
         self.near_sample = 0 # Will be set to telemetry value data["near_sample"]
         self.picking_up = 0 # Will be set to telemetry value data["picking_up"]
         self.send_pickup = False # Set to True to trigger rock pickup
+        self.rock_angles = None # Angles of rocks terrain pixels
+        self.rock_dists = None # Distances of rocks terrain pixels
 # Initialize our rover 
 Rover = RoverState()
 
