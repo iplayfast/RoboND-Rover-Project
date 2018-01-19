@@ -79,6 +79,8 @@ class RoverState():
         self.send_pickup = False # Set to True to trigger rock pickup
         self.rock_angles = None # Angles of rocks terrain pixels
         self.rock_dists = None # Distances of rocks terrain pixels
+        self.stopAngle = 0 # angle that we stopped at
+        self.avgspd = 0
 # Initialize our rover 
 Rover = RoverState()
 

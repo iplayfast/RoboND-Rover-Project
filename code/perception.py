@@ -156,24 +156,6 @@ def perception_step(Rover):
 
 
     # 8) Convert Rover-centric pixel positions to polar coordinates
-    # Update Rover pixel distances and angles
-        # Rover.nav_dists = Rover_centric_pixel_distances
-        # Rover.nav_angles = Rover_centric_angles
-    #if np.sum(rockX + rockY) > 9:
-    #    Rover.nav_dists,Rover.nav_angles = to_polar_coords(rockX,rockY)
-#    elif np.sum(xpix + ypix) > 2000:    # wide area keep to the right
-#        Rover.nav_dists,Rover.nav_angles = to_polar_coords(xpix,ypix)
-#        Rover.nav_angles += 10;
-    #else:
     Rover.nav_dists,Rover.nav_angles = to_polar_coords(xpix,ypix)
-
-   # if rocks are present, aim to them 
-    
     Rover.rock_dists,Rover.rock_angles = to_polar_coords(rockX,rockY)
-    #print(np.sum(rockDists),np.clip(np.mean(Rover.nav_angles),-15,15))
-    #if np.sum(rockDists)>2:
-        #print(np.clip(np.mean(rockAngles),-15,15))
-     #   Rover.nav_dists = rockDists
-     #   Rover.nav_angles = rockAngles
-    
     return Rover
