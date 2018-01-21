@@ -1,6 +1,6 @@
 import numpy as np
 
-def move_toward(Rover,dist,ang,maxSpeed,followWall):
+'''def move_toward(Rover,dist,ang,maxSpeed,followWall):
     if len(ang) >= Rover.stop_forward:  
         # If mode is forward, navigable terrain looks good 
         # and velocity is below max, then throttle 
@@ -22,13 +22,55 @@ def move_toward(Rover,dist,ang,maxSpeed,followWall):
        Rover.steer = 0
        Rover.mode = 'stop'
     return Rover
+'''
+def move_toward(Rover,dist,ang,maxSpeed,followWall):
+    #print("move_towards ang " + str(np.mean(ang * 180 / np.pi)) + " dist " +
+            str(np.mean(dist)) + ' speed ' + str(Rover.vel))
+    if (np.mean(dist) >= Rover.vel) and Rover.vel < maxSpeed:
+        # If mode is forward, navigable terrain looks good 
+        # and velocity is below max, then throttle 
+        if Rover.vel < maxSpeed / 2:
+            # Set throttle value to throttle setting
+            Rover.throttle = Rover.throttle_set
+        else: # Else coast
+            Rover.throttle = 0
+        #print('throttle ' + str(Rover.throttle))
+        Rover.brake = 0
+        offset = 0
+        if followWall:
+            if (np.random.randint(100) < 50):
+                offset = 8 
+            elif (np.random.randint(100) < 50):
+                offset = -8 
+            elif (np.random.randint(100) < 50):
+                offset = 0.8 * np.std(Rover.nav_angles)
+            else:
+                offset = -0.8 * np.std(Rover.nav_angles)
+        Roversteer = np.clip(offset + np.mean(ang * 180 / np.pi), -15,15)
+        if (np.mean(dist) <30):
+            Rover.steer = Roversteer
+        else:
+            if Rover.steer>Roversteer:
+                Rover.steer -=1
+            else:
+                Rover.steer +=1
+    else:
+       # Set mode to "stop" and hit the brakes!
+       Rover.throttle = 0
+       # Set brake to stored brake value
+       Rover.brake = Rover.brake_set
+       Rover.steer = 0
+       Rover.mode = 'stop'
+    return Rover
 
 def stop(Rover):
 # If we're in stop mode but still moving keep braking
-    if Rover.vel > 0.2:
+    #print('stop mode')
+    if Rover.vel > 0.2 or Rover.vel < 0:
         Rover.throttle = 0
         Rover.brake = Rover.brake_set
         Rover.steer = 0
+        Rover.stopAngle = Rover.yaw # steer might be better
     else:
         Rover.mode = 'stopped'
         Rover.stopAngle = Rover.yaw # steer might be better
@@ -36,45 +78,126 @@ def stop(Rover):
  
 def turn(Rover,ang):
     Rover.mode = 'turning'
+    ang %= 360
+    steer = np.clip((ang - Rover.yaw),-15,15)
+    #print("Turning from " + str(round(Rover.yaw)) + " -> " + str(round(ang))+ ' steering ' + str(steer))
     if round(Rover.yaw) == round(ang):
+        #print("Found angle going forward now ");
         Rover.mode = 'forward'
+        Rover.AttemptCount = 10;
     else:
         Rover.throttle = 0
         Rover.brake = 0
-        sign = 1
-        if Rover.yaw > ang:
-            sign = -1
-        Rover.steer = np.clip((abs(Rover.yaw) - abs(ang))* sign,-15,15)
-        print('turning from '+str(Rover.yaw) + ' to ' + str(ang) + ' steer ' + str(Rover.steer))
+        Rover.steer = steer
     return Rover
 
 
-#if we are going from rocks present to non-rocks present or visaversa then
-#modes change to equivilant
-def updatemode(rocksHere):
-    if rocksHere:
-        switcher = {
-                'forward': 'Rforward',
-                'stop': 'Rstop',
-                'turning': 'Rturning',
-                'stopped': 'Rstopped',
-                }
-        return switcher(Rover.mode,Rover.mode)
+def isStuck(Rover):
+    Rover.stuck = False
+    nSamples = 20
+    Rover.avgspd -= Rover.avgspd / nSamples
+    Rover.avgspd += Rover.vel / nSamples
+    if Rover.gettingRock>0: 
+        #print("getting rock " + str(Rover.gettingRock))
+        Rover.gettingRock -=1
+        return Rover;
+    if (Rover.mode=='forward' or Rover.mode=='turning') and Rover.AttemptCount>0:
+        #print("forward or turning " + str(Rover.AttemptCount))
+        Rover.AttemptCount -= 1
+        return Rover
+    #print("average speed " + str(round(Rover.avgspd)) + ' unstuckAngle ' + str(Rover.unstuckAngle))
+    if Rover.avgspd < .2:  #we are stuck or starting
+        Rover.stuck = True
+        if (round(Rover.avgspd)==0 and Rover.gettingRock==0 and False):	# starting
+            #print('starting')
+            Rover.stopAngle = Rover.yaw + 359
+        else:
+            #print('stuck, average speed is ' + str(Rover.avgspd))
+            
+            Rover.stopAngle = (Rover.yaw + Rover.unstuckAngle) 
+            if (np.random.randint(100) & 1):
+                Rover.stopAngle = Rover.stopAngle * -1
+            if (Rover.mode!='turning'):
+                Rover.unstuckAngle /=2
+            Rover.mode = 'turning'
+        Rover.AttemptCount = 220;
+        Rover.avgspd = nSamples * 10 # give it a chance to get unstuck 
+                                    #by setting the average very wrong so checking is bypassed
     else:
-        switcher = {
-                'Rforward': 'forward',
-                'Rstop': 'stop',
-                'Rturning': 'turning',
-                'Rstopped': 'stopped',
-                }
-        return switcher(Rover.mode,Rover.mode)
- 
-        
-        
+        if Rover.unstuckAngle < 180:
+            Rover.unstuckAngle += 1
+    return Rover 
         
 # This is where you can build a decision tree for determining throttle, brake and steer 
 # commands based on the output of the perception_step() function
 def decision_step(Rover):
+
+    #print( 'in mode ' + Rover.mode + ' angles ' + str(np.mean(Rover.nav_angles)) + 'dists ' + str(np.mean(Rover.nav_dists))+' rock angles ' + str(np.mean(Rover.rock_angles)) + ' dists ' + str(np.mean(Rover.rock_dists)))
+    # Implement conditionals to decide what to do given perception data
+    # Here you're all set up with some basic functionality but you'll need to
+    # improve on this decision tree to do a good job of navigating autonomously!
+
+    # Example:
+    # Check if we have vision data to make decisions with
+    Rover = isStuck(Rover)
+    #if (Rover.stuck):
+    #    return Rover;
+    if Rover.rock_angles is not None and len(Rover.rock_angles)>0:
+        Rover.unstuckAngle = 180
+        ang = np.mean(Rover.rock_angles * 180/np.pi)  
+        #print("Rock! angle " + str(ang) + ' dist ' + str(np.mean(Rover.rock_dists)))
+        if (Rover.gettingRock==0):  # just discovered a rock, stop turning and move towards it
+            Rover.stopAngle = np.average(Rover.nav_angles)
+            #Rover.mode = 'turning'
+            #Rover = turn(Rover,ang)
+            Rover.mode = 'forward'
+            Rover = move_toward(Rover,Rover.rock_dists,Rover.rock_angles,Rover.max_vel,False)
+            Rover.gettingRock = 20  # will check for being stuck after 20 loops
+            return Rover
+        if Rover.mode=='pickingup' or round(Rover.yaw)==round(ang):
+            if (np.mean(Rover.rock_dists)<10):
+                Rover.mode = 'pickingup'
+            else:
+                Rover.mode = 'forward'
+                Rover = move_toward(Rover,Rover.rock_dists,Rover.rock_angles,Rover.max_vel,False)
+        elif Rover.mode=='forward':
+            Rover = move_toward(Rover,Rover.rock_dists - 10,Rover.rock_angles,Rover.max_vel/2,False)
+            #Rover = turn(Rover,ang)
+        elif Rover.mode=='turning':
+            Rover = turn(Rover,ang)
+
+#        Rover = move_toward(Rover,Rover.rock_dists,Rover.rock_angles,Rover.max_vel/2,False)
+    elif Rover.nav_angles is not None:
+        # Check for Rover.mode status
+        if Rover.mode == 'forward' or Rover.mode =='pickingup':
+            Rover.mode = 'forward'
+            Rover = move_toward(Rover,Rover.nav_dists,Rover.nav_angles,Rover.max_vel,True)
+        # If we're already in "stop" mode then make different decisions
+        elif Rover.mode == 'stop':
+            Rover = stop(Rover)
+        elif Rover.mode=='stopped':
+            Rover = turn(Rover,Rover.stopAngle)
+        elif Rover.mode=='turning':
+            Rover = turn(Rover,Rover.stopAngle)
+    elif Rover.mode=='turning':
+        Rover = turn(Rover,Rover.stopAngle)
+
+    # Just to make the rover do something 
+    # even if no modifications have been made to the code
+    else:
+        Rover.throttle = Rover.throttle_set
+        Rover.steer = 0
+        Rover.brake = 0
+        
+    # If in a state where want to pickup a rock send pickup command
+    if Rover.near_sample and Rover.vel == 0 and not Rover.picking_up:
+        Rover.send_pickup = True
+    print( 'mode ' + Rover.mode + ' angles ' + str(np.mean(Rover.nav_angles)) + 'dists ' + str(np.mean(Rover.nav_dists))+' rock angles ' + str(np.mean(Rover.rock_angles)) + ' dists ' + str(np.mean(Rover.rock_dists)))
+    return Rover
+'''
+# This is where you can build a decision tree for determining throttle, brake and steer 
+# commands based on the output of the perception_step() function
+def decision_stepold(Rover):
 
     # Implement conditionals to decide what to do given perception data
     # Here you're all set up with some basic functionality but you'll need to
@@ -106,8 +229,10 @@ def decision_step(Rover):
             Rover.avgspd -= Rover.avgspd / nSamples
             Rover.avgspd += Rover.vel / nSamples
             if Rover.avgspd < 1:  #we are stuck
+                print("6")
                 Rover.stopAngle = Rover.yaw + -180 + 30
-                Rover.avgspd = nSamples * 10 # give it a chance
+                Rover.AttemptCount = 20
+                #Rover.avgspd = nSamples * 10 # give it a chance
                 Rover.mode = 'turning'
             else:
                 Rover = move_toward(Rover,Rover.nav_dists,Rover.nav_angles,Rover.max_vel,True)
@@ -115,9 +240,9 @@ def decision_step(Rover):
         elif Rover.mode == 'stop':
             Rover = stop(Rover)
         elif Rover.mode=='stopped':
-            Rover = turn(Rover,(Rover.stopAngle +180) % 360)
+            Rover = turn(Rover,Rover.stopAngle +180)
         elif Rover.mode=='turning':
-            Rover = turn(Rover,(Rover.stopAngle +180) % 360)
+            Rover = turn(Rover,Rover.stopAngle +180)
 
     # Just to make the rover do something 
     # even if no modifications have been made to the code
@@ -211,4 +336,4 @@ def decision_stepold(Rover):
         Rover.send_pickup = True
     
     return Rover
-'''
+

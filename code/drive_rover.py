@@ -80,7 +80,11 @@ class RoverState():
         self.rock_angles = None # Angles of rocks terrain pixels
         self.rock_dists = None # Distances of rocks terrain pixels
         self.stopAngle = 0 # angle that we stopped at
-        self.avgspd = 0
+        self.stuck = False # if average speed is 0 we are stuck
+        self.gettingRock = 0    # if getting rock will count down before checking if it's stuck
+        self.unstuckAngle = 180 # will be cut in half each time it's stuck and then gradually increased to 180 again
+        self.AttemptCount = 10
+        self.avgspd = 10
 # Initialize our rover 
 Rover = RoverState()
 
